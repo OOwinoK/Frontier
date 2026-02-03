@@ -1,1 +1,1 @@
-# Frontier Project - OCR & SHA Integration
+# Frontier Project - LMS & MIS Integration
