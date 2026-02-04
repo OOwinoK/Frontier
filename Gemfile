@@ -18,7 +18,7 @@ gem "connection_pool", "~> 2.4"
 gem "jsonapi-serializer"
 
 # Background jobs - using Sidekiq instead of Solid Queue for more features
-gem "sidekiq", "~> 7.0"
+gem "sidekiq", "~> 8.0"
 
 # Pagination
 gem "kaminari", "~> 1.2"
