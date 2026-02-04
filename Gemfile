@@ -24,7 +24,7 @@ gem "sidekiq", "~> 7.0"
 gem "kaminari", "~> 1.2"
 
 # Money handling for multi-currency support
-gem "money-rails", "~> 1.15"
+gem "money-rails", "~> 3.0"
 
 # Use Rack CORS for handling Cross-Origin Resource Sharing (CORS)
 gem "rack-cors"
