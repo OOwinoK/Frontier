@@ -55,3 +55,4 @@ The system is engineered to meet the demands of modern digital lending:
 1. **Install Dependencies**:
    ```bash
    bundle install
+   bin/rails db:prepare
