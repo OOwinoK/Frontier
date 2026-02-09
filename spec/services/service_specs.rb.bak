@@ -1,0 +1,114 @@
+# spec/services/transaction_service_spec.rb
+require 'rails_helper'
+
+RSpec.describe TransactionService do
+  let(:service) { described_class.new }
+  let(:account1) { create(:account, :asset) }
+  let(:account2) { create(:account, :asset) }
+
+  describe '#create_transaction' do
+    it 'creates a balanced transaction' do
+      transaction = service.create_transaction(
+        idempotency_key: 'test-123',
+        description: 'Test transaction',
+        entries: [
+          { account_id: account1.id, debit: 1000.0000 },
+          { account_id: account2.id, credit: 1000.0000 }
+        ]
+      )
+
+      expect(transaction).to be_persisted
+      expect(transaction.balanced?).to be true
+      expect(transaction.entries.count).to eq(2)
+    end
+
+    it 'updates account balances' do
+      expect {
+        service.create_transaction(
+          idempotency_key: 'test-456',
+          description: 'Test transaction',
+          entries: [
+            { account_id: account1.id, debit: 1000.0000 },
+            { account_id: account2.id, credit: 1000.0000 }
+          ]
+        )
+      }.to change { account1.reload.current_balance }.by(1000.0000)
+        .and change { account2.reload.current_balance }.by(-1000.0000)
+    end
+
+    it 'prevents duplicate transactions with same idempotency key' do
+      service.create_transaction(
+        idempotency_key: 'test-789',
+        description: 'First transaction',
+        entries: [
+          { account_id: account1.id, debit: 1000.0000 },
+          { account_id: account2.id, credit: 1000.0000 }
+        ]
+      )
+
+      # Try creating again with same key
+      transaction2 = service.create_transaction(
+        idempotency_key: 'test-789',
+        description: 'Duplicate attempt',
+        entries: [
+          { account_id: account1.id, debit: 500.0000 },
+          { account_id: account2.id, credit: 500.0000 }
+        ]
+      )
+
+      expect(Transaction.where(idempotency_key: 'test-789').count).to eq(1)
+    end
+
+    it 'raises error for unbalanced transaction' do
+      expect {
+        service.create_transaction(
+          idempotency_key: 'unbalanced',
+          description: 'Unbalanced transaction',
+          entries: [
+            { account_id: account1.id, debit: 1000.0000 },
+            { account_id: account2.id, credit: 500.0000 }
+          ]
+        )
+      }.to raise_error(TransactionService::UnbalancedTransactionError)
+    end
+  end
+end
+
+# spec/services/loan_disbursement_service_spec.rb
+require 'rails_helper'
+
+RSpec.describe LoanDisbursementService do
+  let(:service) { described_class.new }
+
+  describe '#disburse' do
+    it 'creates a loan account and disbursement transaction' do
+      result = service.disburse(
+        borrower_name: 'John Doe',
+        principal_amount: 10000.0000,
+        origination_fee: 500.0000,
+        currency: 'KES',
+        loan_reference: 'LOAN-001'
+      )
+
+      expect(result[:success]).to be true
+      expect(result[:loan_account]).to be_present
+      expect(result[:loan_account].current_balance).to eq(10000.0000)
+      expect(result[:net_disbursement]).to eq(9500.0000)
+    end
+
+    it 'creates proper accounting entries' do
+      result = service.disburse(
+        borrower_name: 'Jane Smith',
+        principal_amount: 5000.0000,
+        origination_fee: 0,
+        currency: 'KES',
+        loan_reference: 'LOAN-002'
+      )
+
+      transaction = result[:transaction]
+      expect(transaction.entries.count).to eq(2)
+      expect(transaction.total_debits).to eq(5000.0000)
+      expect(transaction.total_credits).to eq(5000.0000)
+    end
+  end
+end

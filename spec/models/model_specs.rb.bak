@@ -1,0 +1,112 @@
+# spec/models/account_spec.rb
+require 'rails_helper'
+
+RSpec.describe Account, type: :model do
+  describe 'validations' do
+    it { should validate_presence_of(:code) }
+    it { should validate_presence_of(:name) }
+    it { should validate_presence_of(:account_type) }
+    it { should validate_inclusion_of(:account_type).in_array(Account::TYPES) }
+    it { should validate_inclusion_of(:currency).in_array(Account::CURRENCIES) }
+  end
+
+  describe 'associations' do
+    it { should belong_to(:parent_account).optional }
+    it { should have_many(:child_accounts) }
+    it { should have_many(:entries) }
+    it { should have_many(:balance_snapshots) }
+  end
+
+  describe '#balance' do
+    let(:account) { create(:account) }
+    
+    it 'returns current balance for current date' do
+      account.update(current_balance: 1000.0000)
+      expect(account.balance).to eq(1000.0000)
+    end
+  end
+
+  describe '#debit_normal?' do
+    it 'returns true for ASSET accounts' do
+      account = build(:account, account_type: 'ASSET')
+      expect(account.debit_normal?).to be true
+    end
+
+    it 'returns true for EXPENSE accounts' do
+      account = build(:account, account_type: 'EXPENSE')
+      expect(account.debit_normal?).to be true
+    end
+
+    it 'returns false for LIABILITY accounts' do
+      account = build(:account, account_type: 'LIABILITY')
+      expect(account.debit_normal?).to be false
+    end
+  end
+end
+
+# spec/models/transaction_spec.rb
+require 'rails_helper'
+
+RSpec.describe Transaction, type: :model do
+  describe 'validations' do
+    it { should validate_presence_of(:idempotency_key) }
+    it { should validate_uniqueness_of(:idempotency_key) }
+    it { should validate_presence_of(:posted_at) }
+  end
+
+  describe 'associations' do
+    it { should have_many(:entries) }
+    it { should have_many(:accounts).through(:entries) }
+  end
+
+  describe '#balanced?' do
+    let(:transaction) { create(:transaction) }
+    let(:account1) { create(:account) }
+    let(:account2) { create(:account) }
+
+    it 'returns true when debits equal credits' do
+      create(:entry, transaction: transaction, account: account1, debit: 1000.0000)
+      create(:entry, transaction: transaction, account: account2, credit: 1000.0000)
+      
+      expect(transaction.balanced?).to be true
+    end
+
+    it 'returns false when debits do not equal credits' do
+      create(:entry, transaction: transaction, account: account1, debit: 1000.0000)
+      create(:entry, transaction: transaction, account: account2, credit: 500.0000)
+      
+      expect(transaction.balanced?).to be false
+    end
+  end
+end
+
+# spec/models/entry_spec.rb
+require 'rails_helper'
+
+RSpec.describe Entry, type: :model do
+  describe 'validations' do
+    it 'requires either debit or credit' do
+      entry = build(:entry, debit: nil, credit: nil)
+      expect(entry).not_to be_valid
+      expect(entry.errors[:base]).to include('Entry must have either debit or credit')
+    end
+
+    it 'does not allow both debit and credit' do
+      entry = build(:entry, debit: 100, credit: 100)
+      expect(entry).not_to be_valid
+      expect(entry.errors[:base]).to include('Entry cannot have both debit and credit')
+    end
+  end
+
+  describe '#debit?' do
+    it 'returns true for debit entries' do
+      entry = build(:entry, debit: 100, credit: nil)
+      expect(entry.debit?).to be true
+    end
+
+    it 'returns false for credit entries' do
+      entry = build(:entry, debit: nil, credit: 100)
+      expect(entry.debit?).to be false
+    end
+  end
+end
